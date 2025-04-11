@@ -1,0 +1,124 @@
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "account")
+public class Account {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private String name;
+    private double balance;
+
+    // Getters and Setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public double getBalance() { return balance; }
+    public void setBalance(double balance) { this.balance = balance; }
+}
+import jakarta.persistence.*;
+import java.util.Date;
+
+@Entity
+@Table(name = "transaction_log")
+public class TransactionLog {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private int fromAccount;
+    private int toAccount;
+    private double amount;
+    private Date timestamp;
+
+    public TransactionLog() {
+        this.timestamp = new Date();
+    }
+
+  
+}
+<hibernate-configuration>
+    <session-factory>
+        <property name="hibernate.connection.driver_class">com.mysql.cj.jdbc.Driver</property>
+        <property name="hibernate.connection.url">jdbc:mysql://localhost:3306/bankdb</property>
+        <property name="hibernate.connection.username">root</property>
+        <property name="hibernate.connection.password">password</property>
+        <property name="hibernate.dialect">org.hibernate.dialect.MySQL8Dialect</property>
+        <property name="hibernate.hbm2ddl.auto">update</property>
+
+        <mapping class="Account"/>
+        <mapping class="TransactionLog"/>
+    </session-factory>
+</hibernate-configuration>
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+
+public class HibernateUtil {
+    private static final SessionFactory sessionFactory;
+
+    static {
+        sessionFactory = new Configuration().configure().buildSessionFactory();
+    }
+
+    public static SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+}
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+
+public class BankService {
+
+    public void transferMoney(int fromId, int toId, double amount) {
+        Session session = HibernateUtil.getSessionFactory().openSession();
+        Transaction tx = null;
+
+        try {
+            tx = session.beginTransaction();
+
+            Account from = session.get(Account.class, fromId);
+            Account to = session.get(Account.class, toId);
+
+            if (from == null || to == null) {
+                throw new RuntimeException("Invalid account details");
+            }
+
+            if (from.getBalance() < amount) {
+                throw new RuntimeException("Insufficient balance!");
+            }
+
+            from.setBalance(from.getBalance() - amount);
+            to.setBalance(to.getBalance() + amount);
+
+            session.update(from);
+            session.update(to);
+
+            TransactionLog log = new TransactionLog();
+            log.setFromAccount(fromId);
+            log.setToAccount(toId);
+            log.setAmount(amount);
+            session.save(log);
+
+            tx.commit();
+            System.out.println("Transaction successful.");
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            System.out.println("Transaction failed: " + e.getMessage());
+        } finally {
+            session.close();
+        }
+    }
+}
+public class Main {
+    public static void main(String[] args) {
+        BankService service = new BankService();
+
+       
+        service.transferMoney(1, 2, 500.0); 
+        service.transferMoney(1, 2, 1000000.0); 
+    }
+}
